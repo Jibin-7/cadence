@@ -1,0 +1,1 @@
+"""Composable information-retrieval components."""
