@@ -57,6 +57,14 @@ def history(limit=30):
         return [dict(r) for r in db.execute("SELECT id,query,mode,created_at FROM searches ORDER BY created_at DESC LIMIT ?", (limit,))]
 
 
+def delete_search(search_id: str) -> bool:
+    """Delete one saved search snapshot and its relevance judgments."""
+    with connect() as db:
+        db.execute("DELETE FROM feedback WHERE search_id=?", (search_id,))
+        cursor = db.execute("DELETE FROM searches WHERE id=?", (search_id,))
+        return cursor.rowcount > 0
+
+
 def toggle_favorite(song: dict):
     with connect() as db:
         existing = db.execute("SELECT 1 FROM favorites WHERE song_id=?", (song["id"],)).fetchone()

@@ -178,6 +178,14 @@ async def get_history():
     return {"items": database.history()}
 
 
+@app.delete("/api/history/{search_id}")
+async def delete_history(search_id: str):
+    if not database.delete_search(search_id):
+        raise HTTPException(status_code=404, detail="That saved search no longer exists.")
+    logger.info("history_deleted search_id=%s", search_id)
+    return {"deleted": True}
+
+
 @app.get("/api/favorites")
 async def get_favorites():
     return {"items": database.favorites()}
@@ -227,4 +235,3 @@ app.mount("/assets", StaticFiles(directory=FRONTEND), name="assets")
 @app.get("/{path:path}")
 async def frontend(path: str):
     return FileResponse(FRONTEND / "index.html")
-
