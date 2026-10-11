@@ -92,7 +92,7 @@ Ranked results + explanation + saved judgments
 
 **Definition.** Rocchio updates a query vector toward relevant document centroids and away from non-relevant document centroids: `Q′ = αQ + β·Rel − γ·NonRel`.
 
-**Implementation.** `rocchio_query` in `backend/retrieval/index.py` uses α=1.0, β=0.75 and γ=0.15. Feedback labels are stored per search in SQLite. After each label, CadenceIR rebuilds the feedback vector from that search's indexed provider corpus, scores the full corpus against it, and returns the updated order. The latest ranking is stored for evaluation.
+**Implementation.** `rocchio_query` in `backend/retrieval/index.py` uses α=1.0, β=0.75 and γ=0.15. Feedback labels are stored per search in SQLite. A positive judgment also searches the live provider for more tracks by up to three selected artists; only records with the selected artist ID are added, with a cap of 25 per artist. Those tracks enter the same indexed corpus before Rocchio reranks it, so a relevant judgment can surface new songs from that artist as well as reorder existing results. The original result corpus is retained so Reset removes the judgments and returns to the original ranking. The latest ranking is stored for evaluation.
 
 **Where to demonstrate.** Mark a result relevant and another not relevant. The result order changes and the interface reports that feedback refined the ranking.
 

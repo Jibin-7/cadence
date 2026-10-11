@@ -113,27 +113,74 @@ async def search(payload: SearchRequest):
     return {"searchId": sid, "query": query, "mode": "boolean" if parsed.boolean_mode else payload.mode, "resultCount": len(ranked), "providerCount": len(songs), "results": ranked, "lyricsAvailable": False, "retrieval": {"indexTerms": len(index.postings), "indexedDocuments": len(index.docs), "candidateCount": len(ranked), "pipeline": ["normalize", "tokenize", "inverted-index", "tf-idf cosine", "zone-weight", "exact/phrase boost"]}}
 
 
+async def expand_relevant_artists(songs: list[dict], labels: dict[str, int], judged_songs: dict[str, dict] | None = None) -> tuple[list[dict], dict]:
+    """Add live catalog tracks by positively judged artists to the Rocchio corpus."""
+    song_by_id = {str(song.get("id")): song for song in songs}
+    artists: list[dict] = []
+    seen_artists: set[str] = set()
+    for song_id, label in labels.items():
+        selected = (judged_songs or {}).get(str(song_id)) or song_by_id.get(str(song_id))
+        if label != 1 or not selected:
+            continue
+        artist_name = str(selected.get("artist") or "").strip()
+        artist_id = str(selected.get("artistId") or "").strip()
+        key = artist_id or artist_name.casefold()
+        if artist_name and key not in seen_artists:
+            seen_artists.add(key)
+            artists.append({"id": artist_id, "name": artist_name})
+        if len(artists) >= 3:
+            break
+
+    expanded = list(songs)
+    known_ids = set(song_by_id)
+    for song_id, song in (judged_songs or {}).items():
+        if song_id not in known_ids:
+            expanded.append(song)
+            known_ids.add(song_id)
+    artist_details = []
+    for artist in artists:
+        try:
+            candidates = await provider.search(artist["name"], 50)
+        except ProviderUnavailable as exc:
+            logger.info("feedback_artist_expansion_unavailable artist=%s error=%s", artist["id"] or artist["name"], str(exc))
+            continue
+        if artist["id"]:
+            matches = [song for song in candidates if str(song.get("artistId") or "") == artist["id"]]
+        else:
+            matches = [song for song in candidates if str(song.get("artist") or "").casefold() == artist["name"].casefold()]
+        new_tracks = [song for song in matches if str(song.get("id")) not in known_ids][:25]
+        for song in new_tracks:
+            known_ids.add(str(song.get("id")))
+            expanded.append(song)
+        artist_details.append({"name": artist["name"], "count": len(new_tracks)})
+
+    return expanded, {"added": len(expanded) - len(songs), "artists": artist_details}
+
+
 @app.post("/api/search/feedback")
 async def feedback(payload: FeedbackRequest):
     record = database.get_search(payload.searchId)
     if not record:
         raise HTTPException(status_code=404, detail="This search has expired or is unavailable.")
-    original_results = json.loads(record["results_json"])
-    song_ids = {str(r.get("song", {}).get("id")) for r in original_results}
+    current_results = json.loads(record["results_json"])
+    song_ids = {str(r.get("song", {}).get("id")) for r in current_results}
     if payload.songId not in song_ids:
         raise HTTPException(status_code=404, detail="That track does not belong to this result set.")
     if payload.label == 0:
-        labels = database.put_feedback(payload.searchId, payload.songId, 1)
-        labels.pop(payload.songId, None)
+        labels = database.put_feedback(payload.searchId, payload.songId, 0)
     else:
         labels = database.put_feedback(payload.searchId, payload.songId, payload.label)
     terms = process_query(record["query"])
-    songs = [r["song"] for r in original_results]
+    baseline_results = json.loads(record.get("baseline_json") or record["results_json"])
+    songs = [r["song"] for r in baseline_results]
+    current_songs = {str(r.get("song", {}).get("id")): r["song"] for r in current_results if r.get("song")}
+    judged_songs = {song_id: current_songs[song_id] for song_id in labels if song_id in current_songs}
+    songs, expansion = await expand_relevant_artists(songs, labels, judged_songs)
     index = get_index(songs)
     reranked = rank_documents(index, terms, record["mode"], labels)
     database.update_search_results(payload.searchId, reranked)
     logger.info("feedback search_id=%s label=%d judgments=%d", payload.searchId, payload.label, len(labels))
-    return {"searchId": payload.searchId, "results": reranked, "judgmentCount": len(labels), "refined": bool(labels)}
+    return {"searchId": payload.searchId, "results": reranked, "judgmentCount": len(labels), "refined": bool(labels), "expansion": expansion}
 
 
 @app.get("/api/songs/{song_id}")

@@ -8,11 +8,11 @@
 4. The index builder derives documents and field posting lists only from those provider records.
 5. Boolean candidate selection and/or TF-IDF vector scoring run over this query-time corpus. Zone, phrase and exact-title signals feed the final score.
 6. Ranked provider metadata and explanations are returned; the query/result set is persisted for history and feedback.
-7. Feedback updates a query-specific judgment set and reconstructs the Rocchio query vector over that search's live corpus.
+7. Feedback updates a query-specific judgment set, adds a bounded set of live tracks by positively judged artists, and reconstructs the Rocchio query vector over the expanded corpus.
 
 ## Persistence model
 
-SQLite stores `searches(id, query, mode, created_at, results_json)`, `feedback(search_id, song_id, label, updated_at)` and `favorites(song_id, song_json, created_at)`. Feedback has a composite uniqueness key per search and song. The result snapshot preserves the provider-derived candidate set needed to reproduce feedback ranking. No audio is stored.
+SQLite stores `searches(id, query, mode, created_at, results_json, baseline_json)`, `feedback(search_id, song_id, label, updated_at)` and `favorites(song_id, song_json, created_at)`. Feedback has a composite uniqueness key per search and song. `baseline_json` preserves the original provider-derived candidate set while `results_json` stores the current feedback-expanded ranking, allowing Reset to restore the starting corpus. No audio is stored.
 
 ## Module boundaries
 

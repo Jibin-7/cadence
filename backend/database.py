@@ -19,17 +19,22 @@ def connect():
 def initialize():
     with connect() as db:
         db.executescript("""
-        CREATE TABLE IF NOT EXISTS searches(id TEXT PRIMARY KEY, query TEXT NOT NULL, mode TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, results_json TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS searches(id TEXT PRIMARY KEY, query TEXT NOT NULL, mode TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, results_json TEXT NOT NULL, baseline_json TEXT);
         CREATE TABLE IF NOT EXISTS feedback(search_id TEXT NOT NULL, song_id TEXT NOT NULL, label INTEGER NOT NULL CHECK(label IN (-1,1)), updated_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(search_id,song_id));
         CREATE TABLE IF NOT EXISTS favorites(song_id TEXT PRIMARY KEY, song_json TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
         CREATE INDEX IF NOT EXISTS idx_search_created ON searches(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_feedback_search ON feedback(search_id);
         """)
+        columns = {row[1] for row in db.execute("PRAGMA table_info(searches)")}
+        if "baseline_json" not in columns:
+            db.execute("ALTER TABLE searches ADD COLUMN baseline_json TEXT")
+        db.execute("UPDATE searches SET baseline_json=results_json WHERE baseline_json IS NULL")
 
 
 def save_search(search_id: str, query: str, mode: str, results: list[dict]):
+    results_json = json.dumps(results)
     with connect() as db:
-        db.execute("INSERT INTO searches(id,query,mode,results_json) VALUES(?,?,?,?)", (search_id, query, mode, json.dumps(results)))
+        db.execute("INSERT INTO searches(id,query,mode,results_json,baseline_json) VALUES(?,?,?,?,?)", (search_id, query, mode, results_json, results_json))
 
 
 def get_search(search_id: str):
