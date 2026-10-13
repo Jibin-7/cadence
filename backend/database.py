@@ -1,4 +1,3 @@
-```python
 """SQLite persistence for search history, feedback judgments and favorites."""
 
 from __future__ import annotations
