@@ -1,6 +1,6 @@
-# CadenceIR
+# CadenceIR | Music Search & Information Retrieval
 
-CadenceIR is a music discovery and Information Retrieval mini-project for CSDC7023. It retrieves current track metadata from Apple's iTunes Search API, builds an inverted index from that live result set, and ranks candidates with Boolean retrieval, field-weighted TF-IDF, cosine similarity, and relevance feedback.
+CadenceIR is a music discovery and information retrieval application built as a CSDC7023 mini-project. It retrieves current track metadata from Apple's iTunes Search API, builds an inverted index from that live result set, and ranks candidates with Boolean retrieval, field-weighted TF-IDF, cosine similarity, and relevance feedback.
 
 ## Run locally
 
